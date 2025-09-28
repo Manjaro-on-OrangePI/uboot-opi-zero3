@@ -1,0 +1,42 @@
+name: 'buildpackage'
+on: [push, pull_request]
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  pkgbuild:
+    permissions:
+      contents: write
+      packages: write
+    strategy:
+      matrix:
+        pkgbuild: ["PKGBUILD"]
+        branch: [stable]
+        runs-on: [ubuntu-22.04-arm]
+    runs-on: ${{ matrix.runs-on }}
+    container:
+      image: docker://manjarolinux/build:latest
+    steps:
+      - name: check out repo for action code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - id: version
+        uses: manjaro-contrib/action-pkgbuild-info@main
+        with:
+          pkgbuild: ${{ matrix.pkgbuild }}
+      - name: pkgbuild
+        if: steps.skip.outputs.skip != 'true'
+        uses: manjaro-contrib/action-makepkg@main
+        with:
+          pkgbuild: ${{ matrix.pkgbuild }}
+          dispatch-token: ${{ secrets.DISPATCH }}
+          branch: ${{ matrix.branch }}
+          release: ${{ matrix.branch }}-${{ steps.version.outputs.version }}
+          matrix.arch: $arch
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{  github.ref_name }}
+          path: artifacts/*.pkg.tar.zst
+
